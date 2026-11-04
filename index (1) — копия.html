@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kitoblar olami</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Kirishdan oldin ism-familiya so'raladi -->
+  <div id="gate">
+    <form id="gateForm" novalidate>
+      <h1>Kitoblar olami</h1>
+      <label for="fullName">Ism va familiyangiz</label>
+      <input id="fullName" autocomplete="name" placeholder="Masalan, Aziza Karimova">
+      <p id="gateError" class="error"></p>
+      <button>Kirish</button>
+    </form>
+  </div>
+
+  <main id="app" hidden>
+    <header>
+      <h1>Kitoblar olami</h1>
+      <span id="who"></span>
+    </header>
+
+    <section id="stats" class="cards"></section>
+
+    <h2>Katalog</h2>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Muallif, nom yoki janr bo‘yicha qidiring">
+      <select id="reader"></select>
+    </div>
+    <div class="toolbar filters">
+      <select id="genre"></select>
+      <input id="yearFrom" inputmode="numeric" placeholder="Yildan">
+      <input id="yearTo" inputmode="numeric" placeholder="Yilgacha">
+      <button type="button" id="clearFilters" class="ghost small">Tozalash</button>
+    </div>
+    <ul id="books" class="list"></ul>
+
+    <h2>Internetdagi kitoblar</h2>
+    <form id="webForm" class="toolbar">
+      <input id="webq" type="search" placeholder="Butun dunyo kitoblari ichidan qidiring (nom yoki muallif)">
+      <button>Qidirish</button>
+    </form>
+    <p id="webStatus" role="status"></p>
+    <ul id="web" class="list"></ul>
+
+    <h2>Yangi kitob</h2>
+    <form id="bookForm" class="toolbar" novalidate>
+      <input name="title" placeholder="Nomi">
+      <input name="author" placeholder="Muallif">
+      <input name="genre" placeholder="Janr">
+      <input name="year" placeholder="Yil" inputmode="numeric">
+      <input name="copies" placeholder="Nusxalar" inputmode="numeric" value="1">
+      <button>Qo‘shish</button>
+    </form>
+    <p id="formError" class="error"></p>
+
+    <h2>Yangi o‘quvchi</h2>
+    <form id="readerForm" class="toolbar" novalidate>
+      <input name="name" placeholder="Ism va familiya" autocomplete="off">
+      <input name="phone" placeholder="Telefon (ixtiyoriy)" inputmode="tel">
+      <button>Qo‘shish va raqam berish</button>
+    </form>
+    <p id="readerError" class="error"></p>
+
+    <h2>Berilgan kitoblar</h2>
+    <ul id="loans" class="list"></ul>
+
+    <h2>Eng ko‘p o‘qilgan kitoblar</h2>
+    <ol id="top"></ol>
+
+    <button id="seed" class="ghost">Namuna ma’lumotlarni yozish</button>
+    <p id="toast" role="status"></p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
