@@ -29,6 +29,7 @@ function toMs(s) { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y
 function addDays(s, n) { return new Date(toMs(s) + n * DAY).toISOString().slice(0, 10); }
 function diffDays(a, b) { return Math.round((toMs(a) - toMs(b)) / DAY); }   // a - b, kunlarda
 function fmt(s) { return s.split('-').reverse().join('.'); }                 // 2026-11-03 -> 03.11.2026
+
 /* ===== 3. Qidiruv ===== */
 // Katta-kichik harf, tutuq belgisi (o‘, g‘, ʻ) va aksentni e'tiborsiz qoldiradi
 function norm(s) {
@@ -36,17 +37,24 @@ function norm(s) {
 }
 function searchBooks(query) {
   const words = norm(query).split(/\s+/).filter(Boolean);
-  if (!words.length) return [...db.books].sort((a, b) => a.title.localeCompare(b.title));
+  const genre = $('genre').value;
+  const from = Number($('yearFrom').value) || 0;
+  const to = Number($('yearTo').value) || 9999;
+  const filtered = from > 0 || to < 9999;
   return db.books.filter((b) => {
+    if (genre && b.genre !== genre) return false;
+    if (filtered && (b.year === null || b.year < from || b.year > to)) return false;
     const text = norm(b.title + ' ' + b.author + ' ' + b.genre);
     return words.every((w) => text.includes(w));   // hamma so'z topilishi kerak
-  });
+  }).sort((a, b) => a.title.localeCompare(b.title));
 }
+
 /* ===== 4. Nusxalar va mavjudlik ===== */
 const activeLoans = () => db.loans.filter((l) => !l.returnedAt);
 function available(book) {
   return book.copies - activeLoans().filter((l) => l.bookId === book.id).length;
 }
+
 /* ===== 5. Tekshirish (validatsiya) ===== */
 function validName(s) {
   const words = s.trim().split(/\s+/);
@@ -64,6 +72,7 @@ function validateBook(f) {
   if (!Number.isInteger(c) || c < 1 || c > 999) errors.copies = 'Nusxalar soni 1 dan 999 gacha bo‘lsin';
   return errors;
 }
+
 /* ===== 6. Berish va qaytarish ===== */
 function overdue() { return activeLoans().filter((l) => l.dueAt < today()); }
 
@@ -90,6 +99,7 @@ function giveBack(loanId) {
   const l = db.loans.find((x) => x.id === loanId);
   if (l && !l.returnedAt) { l.returnedAt = today(); save(); }
 }
+
 /* ===== 7. Hisobot: eng ko'p o'qilgan kitoblar ===== */
 function topBooks(limit = 10, sinceDays = null) {
   const from = sinceDays === null ? '' : addDays(today(), -sinceDays);
@@ -101,6 +111,7 @@ function topBooks(limit = 10, sinceDays = null) {
     .map(([id, n]) => ({ book: db.books.find((b) => b.id === id), n }))
     .filter((x) => x.book);
 }
+
 /* ===== 8. Sahifani chizish ===== */
 function renderStats() {
   const copies = db.books.reduce((s, b) => s + b.copies, 0);
@@ -118,6 +129,14 @@ function renderReaders() {
   $('reader').innerHTML = '<option value="">O‘quvchini tanlang</option>' +
     db.readers.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
   $('reader').value = keep;
+}
+
+function renderGenres() {
+  const keep = $('genre').value;
+  const genres = [...new Set(db.books.map((b) => b.genre))].sort();
+  $('genre').innerHTML = '<option value="">Barcha janrlar</option>' +
+    genres.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  $('genre').value = genres.includes(keep) ? keep : '';
 }
 
 function renderBooks() {
@@ -154,10 +173,16 @@ function renderTop() {
     : '<li>Hali berish yozuvlari yo‘q</li>';
 }
 
-function render() { renderStats(); renderReaders(); renderBooks(); renderLoans(); renderTop(); }
+function render() { renderStats(); renderReaders(); renderGenres(); renderBooks(); renderLoans(); renderTop(); }
 function toast(msg) { $('toast').textContent = msg; }
+
 /* ===== 9. Tugmalar va formalar ===== */
 $('q').addEventListener('input', renderBooks);
+['genre', 'yearFrom', 'yearTo'].forEach((id) => $(id).addEventListener('input', renderBooks));
+$('clearFilters').addEventListener('click', () => {
+  $('q').value = ''; $('genre').value = ''; $('yearFrom').value = ''; $('yearTo').value = '';
+  renderBooks();
+});
 
 $('books').addEventListener('click', (e) => {
   const id = e.target.dataset.lend;
@@ -189,6 +214,65 @@ $('bookForm').addEventListener('submit', (e) => {
   e.target.elements.copies.value = 1;
   render();
 });
+
+/* ===== 9b. Internetdagi kitoblarni qidirish (Open Library, bepul) ===== */
+let webResults = [];
+
+async function webSearch(q) {
+  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject&q=' + encodeURIComponent(q);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);       // 10 soniyada javob bo'lmasa to'xtatamiz
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return (data.docs || []).map((d) => ({
+      key: d.key,
+      title: d.title || '',
+      author: (d.author_name || [])[0] || 'Noma‘lum',
+      year: d.first_publish_year || null,
+      genre: ((d.subject || [])[0] || 'Boshqa').slice(0, 40),
+    })).filter((x) => x.title);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const inCatalog = (x) => db.books.some((b) => norm(b.title) === norm(x.title) && norm(b.author) === norm(x.author));
+
+function renderWeb() {
+  $('web').innerHTML = webResults.map((x, i) => `<li>
+    <div><b>${esc(x.title)}</b><br><small>${esc(x.author)} · ${esc(x.genre)}${x.year ? ' · ' + x.year : ''}</small><br>
+      <a href="https://openlibrary.org${esc(x.key)}" target="_blank" rel="noopener">Open Library'da ochish</a></div>
+    <button data-add="${i}" ${inCatalog(x) ? 'disabled' : ''}>${inCatalog(x) ? 'Katalogda bor' : 'Katalogga qo‘shish'}</button>
+  </li>`).join('');
+}
+
+$('webForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('webq').value.trim();
+  if (q.length < 2) { $('webStatus').textContent = 'Kamida 2 ta harf yozing'; return; }
+  $('webStatus').textContent = 'Qidirilmoqda...';
+  try {
+    webResults = await webSearch(q);
+    $('webStatus').textContent = webResults.length ? webResults.length + ' ta kitob topildi' : 'Hech narsa topilmadi';
+  } catch {
+    webResults = [];
+    $('webStatus').textContent = 'Internetga ulanib bo‘lmadi. Keyinroq qayta urinib ko‘ring.';
+  }
+  renderWeb();
+});
+
+$('web').addEventListener('click', (e) => {
+  const x = webResults[e.target.dataset.add];
+  if (!x || inCatalog(x)) return;
+  db.books.push({ id: uid(), title: x.title, author: x.author, genre: x.genre, year: x.year, copies: 1 });
+  save();
+  render();
+  renderWeb();
+  toast('Katalogga qo‘shildi (1 nusxa)');
+});
+
 /* ===== 10. Kirishdan oldin ism-familiya ===== */
 const NAME_KEY = 'kutubxona-ism';
 
@@ -207,17 +291,18 @@ $('gateForm').addEventListener('submit', (e) => {
 });
 const savedName = localStorage.getItem(NAME_KEY);
 if (savedName) enter(savedName);
+
 /* ===== 11. Namuna ma'lumotlar (sinash uchun) ===== */
 function seed() {
   const day = (n) => addDays(today(), n);
   db.books = [
-    ['O‘tkan kunlar', 'Abdulla Qodiriy', 'Roman', 3],
-    ['Sariq devni minib', 'Xudoyberdi To‘xtaboyev', 'Bolalar adabiyoti', 4],
-    ['Shum bola', 'G‘afur G‘ulom', 'Badiiy adabiyot', 2],
-    ['Alkimyogar', 'Paulo Coelho', 'Roman', 3],
-    ['1984', 'George Orwell', 'Fantastika', 2],
-    ['Clean Code', 'Robert C. Martin', 'Dasturlash', 2],
-  ].map(([title, author, genre, copies]) => ({ id: uid(), title, author, genre, year: null, copies }));
+    ['O‘tkan kunlar', 'Abdulla Qodiriy', 'Roman', 3, 1926],
+    ['Sariq devni minib', 'Xudoyberdi To‘xtaboyev', 'Bolalar adabiyoti', 4, 1963],
+    ['Shum bola', 'G‘afur G‘ulom', 'Badiiy adabiyot', 2, 1936],
+    ['Alkimyogar', 'Paulo Coelho', 'Roman', 3, 1988],
+    ['1984', 'George Orwell', 'Fantastika', 2, 1949],
+    ['Clean Code', 'Robert C. Martin', 'Dasturlash', 2, 2008],
+  ].map(([title, author, genre, copies, year]) => ({ id: uid(), title, author, genre, year, copies }));
 
   db.readers = ['Aziza Karimova', 'Jasur Rahmonov', 'Malika Yusupova', 'Bobur Aliyev']
     .map((name, i) => ({ id: uid(), name, phone: '90123456' + i }));
@@ -237,5 +322,6 @@ function seed() {
   save();
 }
 $('seed').addEventListener('click', () => { seed(); render(); toast('Namuna ma’lumotlar yozildi'); });
+
 // Birinchi marta kirgan odamga katalog bo'sh ko'rinmasin
 if (db.books.length === 0) { seed(); render(); }

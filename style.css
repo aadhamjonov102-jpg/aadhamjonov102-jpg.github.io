@@ -11,6 +11,10 @@ button { background: #0e8a66; color: #fff; border: 0; cursor: pointer; font-weig
 button:disabled { opacity: .45; cursor: default; }
 button.ghost { background: none; color: #587066; border: 1px solid #c9d8d0; margin-top: 24px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters { margin-top: 8px; }
+.filters input { width: 110px; }
+button.small { margin-top: 0; padding: 8px 12px; }
+.list a { color: #0b6b4f; font-size: 13px; }
 .toolbar input[type=search] { flex: 1 1 220px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .card { background: #fff; border-radius: 12px; padding: 12px 14px; }
