@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kutubxona katalogi</title>
+  <title>Kitoblar olami</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <!-- Kirishdan oldin ism-familiya so'raladi -->
   <div id="gate">
     <form id="gateForm" novalidate>
-      <h1>Kutubxona katalogi</h1>
+      <h1>Kitoblar olami</h1>
       <label for="fullName">Ism va familiyangiz</label>
       <input id="fullName" autocomplete="name" placeholder="Masalan, Aziza Karimova">
       <p id="gateError" class="error"></p>
@@ -21,7 +21,7 @@
 
   <main id="app" hidden>
     <header>
-      <h1>Kutubxona katalogi</h1>
+      <h1>Kitoblar olami</h1>
       <span id="who"></span>
     </header>
 
@@ -58,6 +58,14 @@
       <button>Qo‘shish</button>
     </form>
     <p id="formError" class="error"></p>
+
+    <h2>Yangi o‘quvchi</h2>
+    <form id="readerForm" class="toolbar" novalidate>
+      <input name="name" placeholder="Ism va familiya" autocomplete="off">
+      <input name="phone" placeholder="Telefon (ixtiyoriy)" inputmode="tel">
+      <button>Qo‘shish va raqam berish</button>
+    </form>
+    <p id="readerError" class="error"></p>
 
     <h2>Berilgan kitoblar</h2>
     <ul id="loans" class="list"></ul>

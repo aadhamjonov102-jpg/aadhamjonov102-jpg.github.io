@@ -4,11 +4,13 @@
 const KEY = 'kutubxona-v1';
 
 function load() {
-  try {
-    return JSON.parse(localStorage.getItem(KEY)) || { books: [], readers: [], loans: [] };
-  } catch {
-    return { books: [], readers: [], loans: [] };
-  }
+  let data;
+  try { data = JSON.parse(localStorage.getItem(KEY)); } catch { data = null; }
+  data = data || { books: [], readers: [], loans: [] };
+  // Eski yozuvlarda kutubxona raqami yo'q bo'lsa, tartib bilan beramiz
+  let n = Math.max(0, ...data.readers.map((r) => r.card || 0));
+  for (const r of data.readers) if (!r.card) r.card = ++n;
+  return data;
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
 
@@ -17,6 +19,10 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const $ = (id) => document.getElementById(id);
 // Foydalanuvchi yozgan matnni sahifaga qo'yishdan oldin shundan o'tkazing
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Kutubxona raqami: 1 -> K-0001
+const cardNo = (n) => 'K-' + String(n).padStart(4, '0');
+const nextCard = () => Math.max(0, ...db.readers.map((r) => r.card || 0)) + 1;
 
 /* ===== 2. Sana bilan ishlash. Sanalar "YYYY-MM-DD" matni ko'rinishida ===== */
 const DAY = 86400000;
@@ -127,7 +133,7 @@ function renderStats() {
 function renderReaders() {
   const keep = $('reader').value;
   $('reader').innerHTML = '<option value="">O‘quvchini tanlang</option>' +
-    db.readers.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+    db.readers.map((r) => `<option value="${r.id}">${cardNo(r.card)} · ${esc(r.name)}</option>`).join('');
   $('reader').value = keep;
 }
 
@@ -159,7 +165,7 @@ function renderLoans() {
     const late = l.dueAt < today();
     const left = diffDays(l.dueAt, today());
     return `<li class="${late ? 'late' : ''}">
-      <div><b>${esc(b ? b.title : '—')}</b><br><small>${esc(r ? r.name : '—')} · ${fmt(l.issuedAt)} → ${fmt(l.dueAt)}</small></div>
+      <div><b>${esc(b ? b.title : '—')}</b><br><small>${r ? cardNo(r.card) + ' · ' + esc(r.name) : '—'} · ${fmt(l.issuedAt)} → ${fmt(l.dueAt)}</small></div>
       <span class="pill ${late ? 'no' : 'ok'}">${late ? -left + ' kun kechikdi' : left + ' kun qoldi'}</span>
       <button data-back="${l.id}">Qaytarish</button>
     </li>`;
@@ -215,11 +221,30 @@ $('bookForm').addEventListener('submit', (e) => {
   render();
 });
 
+$('readerForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  const name = f.name.trim().replace(/\s+/g, ' ');
+  const phone = f.phone.trim();
+  let err = '';
+  if (!validName(name)) err = 'Ism va familiyani to‘liq yozing';
+  else if (db.readers.some((r) => norm(r.name) === norm(name))) err = 'Bu o‘quvchi allaqachon bor';
+  else if (phone && !/^\+?\d[\d\s-]{7,14}$/.test(phone)) err = 'Telefon raqami noto‘g‘ri';
+  $('readerError').textContent = err;
+  if (err) return;
+  const reader = { id: uid(), name, phone, card: nextCard() };
+  db.readers.push(reader);
+  save();
+  e.target.reset();
+  render();
+  toast(name + ' ga ' + cardNo(reader.card) + ' raqami berildi');
+});
+
 /* ===== 9b. Internetdagi kitoblarni qidirish (Open Library, bepul) ===== */
 let webResults = [];
 
 async function webSearch(q) {
-  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject&q=' + encodeURIComponent(q);
+  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject,ebook_access&q=' + encodeURIComponent(q);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);       // 10 soniyada javob bo'lmasa to'xtatamiz
   try {
@@ -232,6 +257,7 @@ async function webSearch(q) {
       author: (d.author_name || [])[0] || 'Noma‘lum',
       year: d.first_publish_year || null,
       genre: ((d.subject || [])[0] || 'Boshqa').slice(0, 40),
+      access: d.ebook_access || 'no_ebook',   // public | borrowable | printdisabled | no_ebook
     })).filter((x) => x.title);
   } finally {
     clearTimeout(timer);
@@ -240,12 +266,23 @@ async function webSearch(q) {
 
 const inCatalog = (x) => db.books.some((b) => norm(b.title) === norm(x.title) && norm(b.author) === norm(x.author));
 
+// Elektron nusxasi bormi: kitobni qanday o'qish mumkinligi
+function readInfo(x) {
+  if (x.access === 'public') return { cls: 'ok', pill: 'Bepul o‘qiladi', link: 'O‘qish' };
+  if (x.access === 'borrowable') return { cls: 'ok', pill: 'Bepul qarzga olinadi', link: 'O‘qish (ro‘yxatdan o‘tish kerak)' };
+  return { cls: 'no', pill: 'Elektron nusxasi yo‘q', link: 'Kitob haqida' };
+}
+
 function renderWeb() {
-  $('web').innerHTML = webResults.map((x, i) => `<li>
+  $('web').innerHTML = webResults.map((x, i) => {
+    const r = readInfo(x);
+    return `<li>
     <div><b>${esc(x.title)}</b><br><small>${esc(x.author)} · ${esc(x.genre)}${x.year ? ' · ' + x.year : ''}</small><br>
-      <a href="https://openlibrary.org${esc(x.key)}" target="_blank" rel="noopener">Open Library'da ochish</a></div>
+      <span class="pill ${r.cls}">${r.pill}</span>
+      <a href="https://openlibrary.org${esc(x.key)}" target="_blank" rel="noopener">${r.link}</a></div>
     <button data-add="${i}" ${inCatalog(x) ? 'disabled' : ''}>${inCatalog(x) ? 'Katalogda bor' : 'Katalogga qo‘shish'}</button>
-  </li>`).join('');
+  </li>`;
+  }).join('');
 }
 
 $('webForm').addEventListener('submit', async (e) => {
@@ -305,7 +342,7 @@ function seed() {
   ].map(([title, author, genre, copies, year]) => ({ id: uid(), title, author, genre, year, copies }));
 
   db.readers = ['Aziza Karimova', 'Jasur Rahmonov', 'Malika Yusupova', 'Bobur Aliyev']
-    .map((name, i) => ({ id: uid(), name, phone: '90123456' + i }));
+    .map((name, i) => ({ id: uid(), name, phone: '90123456' + i, card: i + 1 }));
 
   const [b1, b2, b3, b4, b5, b6] = db.books;
   const [r1, r2, r3, r4] = db.readers;
