@@ -82,3 +82,12 @@ dialog::backdrop { background: #000a; }
 .rhead span { display: flex; gap: 12px; align-items: center; }
 .rhead a { color: var(--blue); font-size: 14px; }
 dialog iframe { flex: 1; width: 100%; border: 0; background: #fff; border-radius: 0 0 16px 16px; }
+
+#dq { width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+button.chip { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 600; }
+button.chip.on { background: var(--green); color: #05241a; border-color: var(--green); }
+.list a.open { background: var(--blue); color: #fff; padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; }
+#dmore { color: var(--blue); }
+#dinfo { color: var(--muted); margin: 4px 0 8px; }
+main .note { text-align: left; font-size: 13px; color: var(--muted); }
