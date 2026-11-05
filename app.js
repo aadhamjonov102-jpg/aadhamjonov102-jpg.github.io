@@ -74,6 +74,18 @@ function available(book) {
   return book.copies - activeLoans().filter((l) => l.bookId === book.id).length;
 }
 
+/* ===== 4b. O'qish havolasi: faqat https, ba'zi saytlarni ichiga qo'yishga moslaymiz ===== */
+function readLink(raw) {
+  let u;
+  try { u = new URL(String(raw).trim()); } catch { return ''; }
+  if (u.protocol !== 'https:') return '';
+  let m = u.hostname === 'archive.org' && u.pathname.match(/^\/details\/([\w.\-]+)/);
+  if (m) return 'https://archive.org/embed/' + m[1];                       // Internet Archive
+  m = u.hostname === 'drive.google.com' && u.pathname.match(/^\/file\/d\/([\w\-]+)/);
+  if (m) return 'https://drive.google.com/file/d/' + m[1] + '/preview';    // Google Drive PDF
+  return u.href;
+}
+
 /* ===== 5. Tekshirish (validatsiya) ===== */
 function validName(s) {
   const words = s.trim().split(/\s+/);
@@ -89,6 +101,7 @@ function validateBook(f) {
   }
   const c = Number(f.copies);
   if (!Number.isInteger(c) || c < 1 || c > 999) errors.copies = 'Nusxalar soni 1 dan 999 gacha bo‘lsin';
+  if (f.readUrl && f.readUrl.trim() && !readLink(f.readUrl)) errors.readUrl = 'O‘qish havolasi https:// bilan boshlansin';
   return errors;
 }
 
@@ -165,6 +178,7 @@ function renderBooks() {
     return `<li>
       <div><b>${esc(b.title)}</b><br><small>${esc(b.author)} · ${esc(b.genre)}</small></div>
       <span class="pill ${a ? 'ok' : 'no'}">${a} / ${b.copies} mavjud</span>
+      ${b.readUrl ? `<button class="read" data-read="${b.id}">O‘qish</button>` : ''}
       <button data-lend="${b.id}" ${a ? '' : 'disabled'}>Berish</button>
     </li>`;
   }).join('') : '<li>Hech narsa topilmadi</li>';
@@ -204,6 +218,12 @@ $('clearFilters').addEventListener('click', () => {
 });
 
 $('books').addEventListener('click', (e) => {
+  const rid = e.target.dataset.read;
+  if (rid) {
+    const b = db.books.find((x) => x.id === rid);
+    if (b) openReader(b.title, b.readUrl);
+    return;
+  }
   const id = e.target.dataset.lend;
   if (!id) return;
   toast(lend(id, $('reader').value) || 'Kitob berildi');
@@ -227,6 +247,7 @@ $('bookForm').addEventListener('submit', (e) => {
   db.books.push({
     id: uid(), title: f.title.trim(), author: f.author.trim(), genre: f.genre.trim() || 'Boshqa',
     year: f.year.trim() ? Number(f.year) : null, copies: Number(f.copies),
+    readUrl: f.readUrl && f.readUrl.trim() ? readLink(f.readUrl) : '',
   });
   save();
   e.target.reset();
@@ -253,11 +274,23 @@ $('readerForm').addEventListener('submit', (e) => {
   toast(name + ' ga ' + cardNo(reader.card) + ' raqami berildi');
 });
 
+/* ===== 9a. Kitobni sayt ichida o'qish oynasi ===== */
+function openReader(title, url) {
+  const safe = readLink(url);
+  if (!safe) { toast('O‘qish havolasi noto‘g‘ri'); return; }
+  $('readerTitle').textContent = title;
+  $('readerOpen').href = safe;
+  $('readerFrame').src = safe;
+  $('readerModal').showModal();
+}
+$('readerClose').addEventListener('click', () => $('readerModal').close());
+$('readerModal').addEventListener('close', () => { $('readerFrame').src = 'about:blank'; });
+
 /* ===== 9b. Internetdagi kitoblarni qidirish (Open Library, bepul) ===== */
 let webResults = [];
 
 async function webSearch(q) {
-  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject,ebook_access&q=' + encodeURIComponent(q);
+  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject,ebook_access,ia&q=' + encodeURIComponent(q);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);       // 10 soniyada javob bo'lmasa to'xtatamiz
   try {
@@ -270,6 +303,7 @@ async function webSearch(q) {
       author: (d.author_name || [])[0] || 'Noma‘lum',
       year: d.first_publish_year || null,
       genre: ((d.subject || [])[0] || 'Boshqa').slice(0, 40),
+      ia: /^[\w.\-]+$/.test((d.ia || [])[0] || '') ? d.ia[0] : '',
       access: d.ebook_access || 'no_ebook',   // public | borrowable | printdisabled | no_ebook
     })).filter((x) => x.title);
   } finally {
@@ -286,6 +320,9 @@ function readInfo(x) {
   return { cls: 'no', pill: 'Elektron nusxasi yo‘q', link: 'Kitob haqida' };
 }
 
+const canReadHere = (x) => x.access === 'public' && x.ia;
+const embedUrl = (x) => 'https://archive.org/embed/' + x.ia;
+
 function renderWeb() {
   $('web').innerHTML = webResults.map((x, i) => {
     const r = readInfo(x);
@@ -293,7 +330,8 @@ function renderWeb() {
     <div><b>${esc(x.title)}</b><br><small>${esc(x.author)} · ${esc(x.genre)}${x.year ? ' · ' + x.year : ''}</small><br>
       <span class="pill ${r.cls}">${r.pill}</span>
       <a href="https://openlibrary.org${esc(x.key)}" target="_blank" rel="noopener">${r.link}</a></div>
-    <button data-add="${i}" ${inCatalog(x) ? 'disabled' : ''}>${inCatalog(x) ? 'Katalogda bor' : 'Katalogga qo‘shish'}</button>
+    <div class="btns">${canReadHere(x) ? `<button class="read" data-webread="${i}">Saytda o‘qish</button>` : ''}
+    <button data-add="${i}" ${inCatalog(x) ? 'disabled' : ''}>${inCatalog(x) ? 'Katalogda bor' : 'Katalogga qo‘shish'}</button></div>
   </li>`;
   }).join('');
 }
@@ -314,9 +352,11 @@ $('webForm').addEventListener('submit', async (e) => {
 });
 
 $('web').addEventListener('click', (e) => {
+  const rx = webResults[e.target.dataset.webread];
+  if (rx && canReadHere(rx)) { openReader(rx.title, embedUrl(rx)); return; }
   const x = webResults[e.target.dataset.add];
   if (!x || inCatalog(x)) return;
-  db.books.push({ id: uid(), title: x.title, author: x.author, genre: x.genre, year: x.year, copies: 1 });
+  db.books.push({ id: uid(), title: x.title, author: x.author, genre: x.genre, year: x.year, copies: 1, readUrl: canReadHere(x) ? embedUrl(x) : '' });
   save();
   render();
   renderWeb();
