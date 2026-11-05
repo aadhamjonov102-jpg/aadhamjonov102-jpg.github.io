@@ -71,3 +71,4 @@ ol { padding-left: 22px; }
 ol li { margin: 4px 0; }
 .error { color: var(--red); margin: 0; min-height: 1.2em; }
 #toast, #webStatus { color: var(--muted); min-height: 1.5em; }
+.note { color: var(--muted); text-align: center; }

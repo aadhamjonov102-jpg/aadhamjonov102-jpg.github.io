@@ -1,5 +1,18 @@
 'use strict';
 
+/* ===== 0. Kirishlar jurnali (Google Sheets). Havolani shu yerga qo'ying ===== */
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbw8_M2gVLFoIJRAeqGqiBMvfUmDbdyexDRGSQZiepdeDKYGqp5ZkJ7kgSIs7WFQaE4pvQ/exec';   // masalan: 'https://script.google.com/macros/s/.../exec'
+
+function logVisit(name) {
+  if (!LOG_URL) return;
+  try {
+    if (sessionStorage.getItem('jurnal')) return;          // bir sessiyada bir marta yoziladi
+    sessionStorage.setItem('jurnal', '1');
+    fetch(LOG_URL, { method: 'POST', mode: 'no-cors', keepalive: true, body: new URLSearchParams({ name }) })
+      .catch(() => {});
+  } catch { /* jurnal ishlamasa ham sayt ishlayveradi */ }
+}
+
 /* ===== 1. Ma'lumotlarni saqlash (brauzerning localStorage'i) ===== */
 const KEY = 'kutubxona-v1';
 
@@ -318,6 +331,7 @@ function enter(name) {
   $('gate').hidden = true;
   $('app').hidden = false;
   $('who').textContent = name;
+  logVisit(name);
   render();
 }
 $('gateForm').addEventListener('submit', (e) => {
