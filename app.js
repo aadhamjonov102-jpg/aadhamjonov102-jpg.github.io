@@ -1,7 +1,7 @@
 'use strict';
 
 /* ===== 0. Kirishlar jurnali (Google Sheets). Havolani shu yerga qo'ying ===== */
-const LOG_URL = 'https://script.google.com/macros/s/AKfycbw8_M2gVLFoIJRAeqGqiBMvfUmDbdyexDRGSQZiepdeDKYGqp5ZkJ7kgSIs7WFQaE4pvQ/exec';   // masalan: 'https://script.google.com/macros/s/.../exec'
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbw8_M2gVLFoIJRAeqGqiBMvfUmDbdyexDRGSQZiepdeDKYGqp5ZkJ7kgSIs7WFQaE4pvQ/exec';
 
 function logVisit(name) {
   if (!LOG_URL) return;
@@ -290,7 +290,7 @@ $('readerModal').addEventListener('close', () => { $('readerFrame').src = 'about
 let webResults = [];
 
 async function webSearch(q) {
-  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject,ebook_access,ia&q=' + encodeURIComponent(q);
+  const url = 'https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,first_publish_year,subject,ebook_access,ia,cover_i&q=' + encodeURIComponent(q);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);       // 10 soniyada javob bo'lmasa to'xtatamiz
   try {
@@ -304,6 +304,7 @@ async function webSearch(q) {
       year: d.first_publish_year || null,
       genre: ((d.subject || [])[0] || 'Boshqa').slice(0, 40),
       ia: /^[\w.\-]+$/.test((d.ia || [])[0] || '') ? d.ia[0] : '',
+      cover: Number.isInteger(d.cover_i) ? d.cover_i : 0,
       access: d.ebook_access || 'no_ebook',   // public | borrowable | printdisabled | no_ebook
     })).filter((x) => x.title);
   } finally {
@@ -356,7 +357,7 @@ $('web').addEventListener('click', (e) => {
   if (rx && canReadHere(rx)) { openReader(rx.title, embedUrl(rx)); return; }
   const x = webResults[e.target.dataset.add];
   if (!x || inCatalog(x)) return;
-  db.books.push({ id: uid(), title: x.title, author: x.author, genre: x.genre, year: x.year, copies: 1, readUrl: canReadHere(x) ? embedUrl(x) : '' });
+  db.books.push({ id: uid(), title: x.title, author: x.author, genre: x.genre, year: x.year, copies: 1, cover: x.cover || 0, readUrl: canReadHere(x) ? embedUrl(x) : '' });
   save();
   render();
   renderWeb();

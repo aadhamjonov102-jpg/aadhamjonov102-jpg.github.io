@@ -4,6 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kitoblar olami</title>
+  <meta name="theme-color" content="#0b0f23">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script>
+    /* Yorug'/qorong'i rejim sahifa chizilishidan oldin tanlanadi (miltillamaslik uchun) */
+    try { var t = localStorage.getItem('kutubxona-tema'); document.documentElement.dataset.theme = (t === 'light' || t === 'dark') ? t : 'dark'; }
+    catch (e) { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,6 +26,10 @@
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
     <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
   </svg>
 
@@ -50,6 +63,8 @@
       <a href="#berilgan" data-go="berilgan" class="nav"><svg class="ic"><use href="#i-list"/></svg>Berilgan kitoblar<span id="lateBadge" class="badge" hidden></span></a>
       <a href="#oquvchilar" data-go="oquvchilar" class="nav"><svg class="ic"><use href="#i-users"/></svg>O‘quvchilar</a>
       <a href="#internet" data-go="internet" class="nav"><svg class="ic"><use href="#i-globe"/></svg>Internetdagi kitoblar</a>
+
+      <button type="button" id="installBtn" class="ghost install"><svg class="ic"><use href="#i-download"/></svg>Telefonga o‘rnatish</button>
     </aside>
     <div id="scrim"></div>
 
@@ -61,6 +76,7 @@
           <svg class="ic"><use href="#i-search"/></svg>
           <input id="topq" type="search" placeholder="Kitob qidirish...">
         </label>
+        <button type="button" id="themeBtn" class="tool-btn" aria-label="Yorug‘/qorong‘i rejim" title="Yorug‘/qorong‘i rejim"><svg class="ic"><use href="#i-sun"/></svg></button>
         <span class="user"><span id="ava" class="ava"></span><span id="who"></span></span>
       </header>
 
@@ -69,9 +85,25 @@
         <section class="page" data-page="home">
           <h1>Bosh sahifa</h1>
           <section id="stats" class="cards"></section>
-          <div class="panel">
-            <h2>Eng ko‘p o‘qilgan kitoblar</h2>
-            <ol id="top"></ol>
+          <div class="grid2">
+            <div class="panel">
+              <h2>Oyma-oy berilgan kitoblar</h2>
+              <div id="chartMonths"></div>
+            </div>
+            <div class="panel">
+              <h2>Janrlar bo‘yicha kitoblar</h2>
+              <div id="chartGenres"></div>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="panel">
+              <h2>Oyning eng faol o‘quvchilari</h2>
+              <ol id="leaders" class="leaders"></ol>
+            </div>
+            <div class="panel">
+              <h2>Eng ko‘p o‘qilgan kitoblar</h2>
+              <ol id="top"></ol>
+            </div>
           </div>
           <button id="seed" class="ghost">Namuna ma’lumotlarni yozish</button>
         </section>
@@ -141,9 +173,10 @@
           </div>
           <div class="panel">
             <h2>Ro‘yxat <small id="readersCount"></small></h2>
+            <p class="note levels-note">Darajalar: <b>Yangi a’zo</b> (0 kitob), <b>Yosh kitobxon</b> (1-2), <b>Faol kitobxon</b> (3-5), <b>Kitob ustasi</b> (6 va undan ko‘p).</p>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Raqam</th><th>Ism-familiya</th><th>Telefon</th><th>Qo‘lidagi kitob</th></tr></thead>
+                <thead><tr><th>Raqam</th><th>Ism-familiya</th><th>Telefon</th><th>Daraja</th><th>Qo‘lida</th><th>Karta</th></tr></thead>
                 <tbody id="readersBody"></tbody>
               </table>
             </div>
@@ -179,6 +212,29 @@
     <iframe id="readerFrame" title="Kitob" src="about:blank"
       sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads" allowfullscreen></iframe>
   </dialog>
+
+  <dialog id="cardModal">
+    <div id="libcard" class="libcard">
+      <div class="lc-top">
+        <span class="logo"><svg class="ic"><use href="#i-book"/></svg></span>
+        <div><b>KITOBLAR OLAMI</b><small>Kutubxona kartasi</small></div>
+      </div>
+      <div class="lc-body">
+        <div class="lc-info">
+          <small>O‘quvchi</small><strong id="lcName"></strong>
+          <small>Karta raqami</small><span id="lcNo"></span>
+          <small>Daraja</small><span id="lcLevel"></span>
+        </div>
+        <div id="lcQr" class="lc-qr"></div>
+      </div>
+    </div>
+    <div class="card-actions">
+      <button type="button" id="lcPrint">Chop etish</button>
+      <button type="button" id="lcClose" class="ghost small">Yopish</button>
+    </div>
+  </dialog>
+
+  <canvas id="fx" aria-hidden="true"></canvas>
 
   <script src="app.js"></script>
   <script src="darsliklar.js"></script>
